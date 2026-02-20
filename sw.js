@@ -1,4 +1,4 @@
-const CACHE_NAME = 'treadmill-v2';
+const CACHE_NAME = 'treadmill-v3';
 const ASSETS = [
   './',
   './index.html',

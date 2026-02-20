@@ -1,20 +1,22 @@
 // Web Worker: Streaming Apple Health XML parser
-// Processes export.xml in chunks to keep memory usage reasonable
+// Supports fast mode (workouts only) and detailed mode (+ HR samples, steps)
 
-const CHUNK_SIZE = 4 * 1024 * 1024;
+const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB chunks for better throughput
 
 let workouts = [];
 let hrRecords = [];
 let stepRecords = [];
+let parseMode = 'fast'; // 'fast' = workouts only, 'detailed' = + HR/steps
 
 self.onmessage = async function (e) {
   if (e.data.type === 'parse') {
     try {
+      parseMode = e.data.mode || 'fast';
       await parseFile(e.data.file);
       const enriched = correlateData(workouts, hrRecords, stepRecords);
       self.postMessage({ type: 'complete', data: enriched });
     } catch (err) {
-      self.postMessage({ type: 'error', message: err.message });
+      self.postMessage({ type: 'error', message: err.message || String(err) });
     }
   }
 };
@@ -116,30 +118,17 @@ function processBuffer(text) {
   while (pos < text.length) {
     const searchText = text.substring(pos);
 
-    const iHR = searchText.indexOf('type="HKQuantityTypeIdentifierHeartRate"');
-    const iStep = searchText.indexOf('type="HKQuantityTypeIdentifierStepCount"');
-    const iWork = searchText.indexOf('workoutActivityType="HKWorkoutActivityTypeRunning"');
+    if (parseMode === 'fast') {
+      // Fast mode: only look for Workout elements
+      const iWork = searchText.indexOf('workoutActivityType="HKWorkoutActivityTypeRunning"');
+      if (iWork === -1) {
+        return text.substring(Math.max(0, text.length - 300));
+      }
 
-    const candidates = [];
-    if (iHR !== -1) candidates.push({ idx: iHR, type: 'hr' });
-    if (iStep !== -1) candidates.push({ idx: iStep, type: 'step' });
-    if (iWork !== -1) candidates.push({ idx: iWork, type: 'workout' });
+      const absIdx = pos + iWork;
+      let elemStart = text.lastIndexOf('<', absIdx);
+      if (elemStart === -1 || elemStart < pos) { pos = absIdx + 1; continue; }
 
-    if (candidates.length === 0) {
-      return text.substring(Math.max(0, text.length - 300));
-    }
-
-    candidates.sort((a, b) => a.idx - b.idx);
-    const nearest = candidates[0];
-    const absIdx = pos + nearest.idx;
-
-    let elemStart = text.lastIndexOf('<', absIdx);
-    if (elemStart === -1 || elemStart < pos) {
-      pos = absIdx + 1;
-      continue;
-    }
-
-    if (nearest.type === 'workout') {
       const endIdx = text.indexOf('</Workout>', absIdx);
       if (endIdx !== -1) {
         processWorkoutBlock(text.substring(elemStart, endIdx + 10));
@@ -149,48 +138,79 @@ function processBuffer(text) {
         return text.substring(elemStart);
       }
     } else {
-      let endIdx = text.indexOf('/>', absIdx);
-      const closeIdx = text.indexOf('</Record>', absIdx);
+      // Detailed mode: look for workouts, HR records, and step records
+      const iHR = searchText.indexOf('type="HKQuantityTypeIdentifierHeartRate"');
+      const iStep = searchText.indexOf('type="HKQuantityTypeIdentifierStepCount"');
+      const iWork = searchText.indexOf('workoutActivityType="HKWorkoutActivityTypeRunning"');
 
-      if (endIdx === -1 && closeIdx === -1) {
-        return text.substring(elemStart);
+      const candidates = [];
+      if (iHR !== -1) candidates.push({ idx: iHR, type: 'hr' });
+      if (iStep !== -1) candidates.push({ idx: iStep, type: 'step' });
+      if (iWork !== -1) candidates.push({ idx: iWork, type: 'workout' });
+
+      if (candidates.length === 0) {
+        return text.substring(Math.max(0, text.length - 300));
       }
 
-      let recordEnd;
-      if (endIdx !== -1 && (closeIdx === -1 || endIdx < closeIdx)) {
-        recordEnd = endIdx + 2;
-      } else {
-        recordEnd = closeIdx + 9;
-      }
+      candidates.sort((a, b) => a.idx - b.idx);
+      const nearest = candidates[0];
+      const absIdx = pos + nearest.idx;
 
-      const recordXml = text.substring(elemStart, recordEnd);
+      let elemStart = text.lastIndexOf('<', absIdx);
+      if (elemStart === -1 || elemStart < pos) { pos = absIdx + 1; continue; }
 
-      if (nearest.type === 'hr') {
-        const val = attrFloat(recordXml, 'value');
-        const date = attr(recordXml, 'startDate');
-        if (val !== null && date) {
-          hrRecords.push({ ts: parseHealthDate(date).getTime(), value: val });
+      if (nearest.type === 'workout') {
+        const endIdx = text.indexOf('</Workout>', absIdx);
+        if (endIdx !== -1) {
+          processWorkoutBlock(text.substring(elemStart, endIdx + 10));
+          pos = endIdx + 10;
+        } else {
+          parseState.inWorkout = true;
+          return text.substring(elemStart);
         }
       } else {
-        const val = attrFloat(recordXml, 'value');
-        const start = attr(recordXml, 'startDate');
-        const end = attr(recordXml, 'endDate');
-        if (val !== null && start && end) {
-          stepRecords.push({
-            tsStart: parseHealthDate(start).getTime(),
-            tsEnd: parseHealthDate(end).getTime(),
-            value: val
-          });
-        }
-      }
+        let endIdx = text.indexOf('/>', absIdx);
+        const closeIdx = text.indexOf('</Record>', absIdx);
 
-      pos = recordEnd;
+        if (endIdx === -1 && closeIdx === -1) {
+          return text.substring(elemStart);
+        }
+
+        let recordEnd;
+        if (endIdx !== -1 && (closeIdx === -1 || endIdx < closeIdx)) {
+          recordEnd = endIdx + 2;
+        } else {
+          recordEnd = closeIdx + 9;
+        }
+
+        const recordXml = text.substring(elemStart, recordEnd);
+
+        if (nearest.type === 'hr') {
+          const val = attrFloat(recordXml, 'value');
+          const date = attr(recordXml, 'startDate');
+          if (val !== null && date) {
+            hrRecords.push({ ts: parseHealthDate(date).getTime(), value: val });
+          }
+        } else {
+          const val = attrFloat(recordXml, 'value');
+          const start = attr(recordXml, 'startDate');
+          const end = attr(recordXml, 'endDate');
+          if (val !== null && start && end) {
+            stepRecords.push({
+              tsStart: parseHealthDate(start).getTime(),
+              tsEnd: parseHealthDate(end).getTime(),
+              value: val
+            });
+          }
+        }
+
+        pos = recordEnd;
+      }
     }
   }
 
   return '';
 }
-
 
 function processWorkoutBlock(xml) {
   const wo = {
@@ -220,6 +240,47 @@ function processWorkoutBlock(xml) {
     wo.duration = wo.duration * 60;
   }
 
+  // Indoor detection
+  const indoorMatch = xml.match(/key="HKIndoorWorkout"\s+value="(\d)"/);
+  if (indoorMatch) {
+    wo.isIndoor = indoorMatch[1] === '1';
+  }
+
+  // Extract ALL WorkoutStatistics
+  const statsRegex = /<WorkoutStatistics[^>]+>/g;
+  let statsMatch;
+  while ((statsMatch = statsRegex.exec(xml)) !== null) {
+    const block = statsMatch[0];
+    const statType = attr(block, 'type');
+
+    if (statType === 'HKQuantityTypeIdentifierHeartRate') {
+      wo.statistics.avgHR = attrFloat(block, 'average');
+      wo.statistics.minHR = attrFloat(block, 'minimum');
+      wo.statistics.maxHR = attrFloat(block, 'maximum');
+    } else if (statType === 'HKQuantityTypeIdentifierDistanceWalkingRunning') {
+      const distSum = attrFloat(block, 'sum');
+      const distUnit = attr(block, 'unit');
+      if (distSum !== null) {
+        wo.statistics.distance = distSum;
+        wo.statistics.distanceUnit = distUnit || 'mi';
+      }
+    } else if (statType === 'HKQuantityTypeIdentifierActiveEnergyBurned') {
+      const calSum = attrFloat(block, 'sum');
+      if (calSum !== null) {
+        wo.statistics.activeCalories = calSum;
+      }
+    } else if (statType === 'HKQuantityTypeIdentifierRunningSpeed') {
+      wo.statistics.avgSpeed = attrFloat(block, 'average');
+      wo.statistics.maxSpeed = attrFloat(block, 'maximum');
+    }
+  }
+
+  // Use WorkoutStatistics distance as fallback (or primary) for totalDistance
+  if ((!wo.totalDistance || wo.totalDistance === 0) && wo.statistics.distance) {
+    wo.totalDistance = wo.statistics.distance;
+    wo.totalDistanceUnit = wo.statistics.distanceUnit || 'mi';
+  }
+
   // Normalize distance to miles
   if (wo.totalDistanceUnit === 'km') {
     wo.totalDistance = wo.totalDistance * 0.621371;
@@ -232,20 +293,9 @@ function processWorkoutBlock(xml) {
     wo.totalEnergyBurned = wo.totalEnergyBurned / 4.184;
   }
 
-  // Indoor detection
-  const indoorMatch = xml.match(/key="HKIndoorWorkout"\s+value="(\d)"/);
-  if (indoorMatch) {
-    wo.isIndoor = indoorMatch[1] === '1';
-  }
-
-  // WorkoutStatistics for HR
-  const statsRegex = /<WorkoutStatistics[^>]*type="HKQuantityTypeIdentifierHeartRate"[^>]*>/g;
-  let statsMatch;
-  while ((statsMatch = statsRegex.exec(xml)) !== null) {
-    const block = statsMatch[0];
-    wo.statistics.avgHR = attrFloat(block, 'average');
-    wo.statistics.minHR = attrFloat(block, 'minimum');
-    wo.statistics.maxHR = attrFloat(block, 'maximum');
+  // Use active calories as fallback
+  if ((!wo.totalEnergyBurned || wo.totalEnergyBurned === 0) && wo.statistics.activeCalories) {
+    wo.totalEnergyBurned = wo.statistics.activeCalories;
   }
 
   // WorkoutEvents (pause/resume)
@@ -258,6 +308,11 @@ function processWorkoutBlock(xml) {
     });
   }
 
+  // Compute pace (min/mile) from duration and distance
+  if (wo.totalDistance > 0 && wo.duration > 0) {
+    wo.pace = wo.duration / wo.totalDistance;
+  }
+
   workouts.push(wo);
 }
 
@@ -265,57 +320,47 @@ function correlateData(workouts, hrRecords, stepRecords) {
   if (workouts.length === 0) return workouts;
 
   workouts.sort((a, b) => a.startDate - b.startDate);
-  hrRecords.sort((a, b) => a.ts - b.ts);
-  stepRecords.sort((a, b) => a.tsStart - b.tsStart);
 
-  for (const wo of workouts) {
-    const startTs = wo.startDate.getTime();
-    const endTs = wo.endDate.getTime();
+  // In detailed mode, correlate HR and step data with workouts
+  if (parseMode === 'detailed' && (hrRecords.length > 0 || stepRecords.length > 0)) {
+    hrRecords.sort((a, b) => a.ts - b.ts);
+    stepRecords.sort((a, b) => a.tsStart - b.tsStart);
 
-    // Binary search for HR records in this workout window
-    let lo = bsearch(hrRecords, startTs, r => r.ts);
-    for (let i = lo; i < hrRecords.length && hrRecords[i].ts <= endTs; i++) {
-      if (hrRecords[i].ts >= startTs) {
-        wo.hrSamples.push({ ts: hrRecords[i].ts, value: hrRecords[i].value });
-      }
-    }
+    for (const wo of workouts) {
+      const startTs = wo.startDate.getTime();
+      const endTs = wo.endDate.getTime();
 
-    // Compute avg/max HR from samples if not in statistics
-    if (wo.hrSamples.length > 0) {
-      const vals = wo.hrSamples.map(s => s.value);
-      if (!wo.statistics.avgHR) {
-        wo.statistics.avgHR = vals.reduce((a, b) => a + b, 0) / vals.length;
-      }
-      if (!wo.statistics.maxHR) {
-        wo.statistics.maxHR = Math.max(...vals);
-      }
-      if (!wo.statistics.minHR) {
-        wo.statistics.minHR = Math.min(...vals);
-      }
-    }
-
-    // Steps during workout -> cadence
-    let totalSteps = 0;
-    let lo2 = bsearch(stepRecords, startTs, r => r.tsStart);
-    for (let i = lo2; i < stepRecords.length && stepRecords[i].tsStart <= endTs; i++) {
-      if (stepRecords[i].tsEnd >= startTs) {
-        const overlapStart = Math.max(stepRecords[i].tsStart, startTs);
-        const overlapEnd = Math.min(stepRecords[i].tsEnd, endTs);
-        const recordDuration = stepRecords[i].tsEnd - stepRecords[i].tsStart;
-        if (recordDuration > 0) {
-          const fraction = (overlapEnd - overlapStart) / recordDuration;
-          totalSteps += stepRecords[i].value * fraction;
+      // Binary search for HR records in this workout window
+      let lo = bsearch(hrRecords, startTs, r => r.ts);
+      for (let i = lo; i < hrRecords.length && hrRecords[i].ts <= endTs; i++) {
+        if (hrRecords[i].ts >= startTs) {
+          wo.hrSamples.push({ ts: hrRecords[i].ts, value: hrRecords[i].value });
         }
       }
-    }
 
-    if (totalSteps > 0 && wo.duration > 0) {
-      wo.cadence = Math.round(totalSteps / wo.duration);
-    }
+      if (wo.hrSamples.length > 0) {
+        const vals = wo.hrSamples.map(s => s.value);
+        if (!wo.statistics.avgHR) wo.statistics.avgHR = vals.reduce((a, b) => a + b, 0) / vals.length;
+        if (!wo.statistics.maxHR) wo.statistics.maxHR = Math.max(...vals);
+        if (!wo.statistics.minHR) wo.statistics.minHR = Math.min(...vals);
+      }
 
-    // Compute pace (min/mile)
-    if (wo.totalDistance > 0 && wo.duration > 0) {
-      wo.pace = wo.duration / wo.totalDistance;
+      // Steps during workout -> cadence
+      let totalSteps = 0;
+      let lo2 = bsearch(stepRecords, startTs, r => r.tsStart);
+      for (let i = lo2; i < stepRecords.length && stepRecords[i].tsStart <= endTs; i++) {
+        if (stepRecords[i].tsEnd >= startTs) {
+          const overlapStart = Math.max(stepRecords[i].tsStart, startTs);
+          const overlapEnd = Math.min(stepRecords[i].tsEnd, endTs);
+          const recordDuration = stepRecords[i].tsEnd - stepRecords[i].tsStart;
+          if (recordDuration > 0) {
+            totalSteps += stepRecords[i].value * ((overlapEnd - overlapStart) / recordDuration);
+          }
+        }
+      }
+      if (totalSteps > 0 && wo.duration > 0) {
+        wo.cadence = Math.round(totalSteps / wo.duration);
+      }
     }
   }
 

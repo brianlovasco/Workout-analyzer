@@ -11,6 +11,58 @@ window.onunhandledrejection = function (e) {
   console.error('Unhandled rejection:', e.reason);
 };
 
+// ---- IndexedDB persistence ----
+const DB = {
+  NAME: 'treadmill-analyzer',
+  VERSION: 1,
+  STORE: 'data',
+
+  open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(this.NAME, this.VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(this.STORE)) {
+          db.createObjectStore(this.STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async save(key, value) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.STORE, 'readwrite');
+      tx.objectStore(this.STORE).put(value, key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  },
+
+  async load(key) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.STORE, 'readonly');
+      const req = tx.objectStore(this.STORE).get(key);
+      req.onsuccess = () => { db.close(); resolve(req.result); };
+      req.onerror = () => { db.close(); reject(req.error); };
+    });
+  },
+
+  async clear() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.STORE, 'readwrite');
+      tx.objectStore(this.STORE).clear();
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+};
+
+// ---- App ----
 class TreadmillApp {
   constructor() {
     this.workouts = [];
@@ -26,7 +78,7 @@ class TreadmillApp {
     this.init();
   }
 
-  init() {
+  async init() {
     this.loadSettings();
     this.setupUpload();
     this.setupSettings();
@@ -35,6 +87,41 @@ class TreadmillApp {
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+
+    // Try loading saved data
+    await this.loadSavedData();
+  }
+
+  async loadSavedData() {
+    try {
+      const saved = await DB.load('workouts');
+      if (saved && saved.length > 0) {
+        this.workouts = saved;
+        const savedDate = await DB.load('savedDate');
+        const status = document.getElementById('upload-status');
+        const progress = document.getElementById('upload-progress');
+        if (progress) progress.style.display = 'block';
+        if (status) {
+          const dateStr = savedDate ? new Date(savedDate).toLocaleDateString() : 'unknown';
+          status.textContent = `Loaded ${saved.length} saved runs (imported ${dateStr}). Re-upload to refresh.`;
+        }
+        const progressBar = document.getElementById('progress-bar');
+        if (progressBar) progressBar.style.width = '100%';
+        this.runAnalysis();
+        this.showDashboard();
+      }
+    } catch (err) {
+      console.warn('Could not load saved data:', err);
+    }
+  }
+
+  async saveData() {
+    try {
+      await DB.save('workouts', this.workouts);
+      await DB.save('savedDate', new Date().toISOString());
+    } catch (err) {
+      console.warn('Could not save data:', err);
     }
   }
 
@@ -168,10 +255,8 @@ class TreadmillApp {
         }
         if (status) status.textContent = 'Unzipping export (this may take a moment)...';
 
-        // Load zip directory only (doesn't decompress files yet)
         const zip = await JSZip.loadAsync(file);
 
-        // Find the export.xml in the zip
         let xmlEntry = zip.file('apple_health_export/export.xml') || zip.file('export.xml');
         if (!xmlEntry) {
           const xmlFiles = Object.keys(zip.files).filter(f => f.endsWith('export.xml'));
@@ -183,27 +268,23 @@ class TreadmillApp {
           xmlEntry = zip.file(xmlFiles[0]);
         }
 
-        // Decompress as arraybuffer (more memory efficient than text on mobile)
         if (status) status.textContent = 'Decompressing export.xml...';
         const arrayBuffer = await xmlEntry.async('arraybuffer');
         xmlFile = new Blob([arrayBuffer], { type: 'application/xml' });
-
-        // Release zip references to free memory
-        arrayBuffer;
 
       } catch (err) {
         console.error('Zip error:', err);
         if (status) {
           status.innerHTML = `<strong>Error reading zip:</strong> ${err.message}<br><br>` +
-            '<strong>Alternative:</strong> On a computer, extract the zip file and upload the <code>export.xml</code> file directly. ' +
-            'On iPhone, open Files app, long-press the zip, tap "Uncompress", then find export.xml inside the new folder.';
+            '<strong>Alternative:</strong> Extract the zip file first, then upload the <code>export.xml</code> directly. ' +
+            'On iPhone: open Files app, long-press the zip, tap "Uncompress".';
         }
         if (dropZone) dropZone.style.display = '';
         return;
       }
     }
 
-    if (status) status.textContent = 'Starting parser...';
+    if (status) status.textContent = 'Parsing workouts (fast mode)...';
 
     try {
       this.worker = new Worker('js/parser.worker.js');
@@ -214,7 +295,7 @@ class TreadmillApp {
 
     this.worker.onerror = (err) => {
       console.error('Worker error:', err);
-      if (status) status.textContent = 'Parser error: ' + (err.message || 'Worker crashed. Try uploading the export.xml file instead of the zip.');
+      if (status) status.textContent = 'Parser error: ' + (err.message || 'Worker crashed. Try uploading export.xml instead of zip.');
     };
 
     this.worker.onmessage = (e) => {
@@ -223,23 +304,29 @@ class TreadmillApp {
         if (progressBar) progressBar.style.width = pct + '%';
         if (status) {
           const s = e.data.stats;
-          status.textContent = `Parsing... ${pct}% (${s.workouts} runs, ${s.hrRecords.toLocaleString()} HR samples)`;
+          status.textContent = `Parsing... ${pct}% (${s.workouts} runs found)`;
         }
       } else if (e.data.type === 'complete') {
         this.workouts = e.data.data;
-        if (status) status.textContent = `Found ${this.workouts.length} running workouts. Analyzing...`;
         if (progressBar) progressBar.style.width = '100%';
+        if (status) status.textContent = `Found ${this.workouts.length} running workouts. Saving & analyzing...`;
 
-        setTimeout(() => {
+        this.worker.terminate();
+        this.worker = null;
+
+        setTimeout(async () => {
+          await this.saveData();
           this.runAnalysis();
           this.showDashboard();
-        }, 100);
+          if (status) status.textContent = `${this.workouts.length} runs loaded and saved. Data will persist across refreshes.`;
+        }, 50);
       } else if (e.data.type === 'error') {
         if (status) status.textContent = 'Parse error: ' + e.data.message;
       }
     };
 
-    this.worker.postMessage({ type: 'parse', file: xmlFile });
+    // Use fast mode: only extract Workout elements, skip individual HR/step records
+    this.worker.postMessage({ type: 'parse', file: xmlFile, mode: 'fast' });
   }
 
   runAnalysis() {
