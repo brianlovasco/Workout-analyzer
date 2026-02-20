@@ -1,14 +1,4 @@
-const CACHE_NAME = 'treadmill-v3';
-const ASSETS = [
-  './',
-  './index.html',
-  './css/styles.css',
-  './js/app.js',
-  './js/analyzer.js',
-  './js/charts.js',
-  './js/parser.worker.js',
-  './manifest.json'
-];
+const CACHE_NAME = 'treadmill-v4';
 
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js',
@@ -18,9 +8,7 @@ const CDN_ASSETS = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      cache.addAll([...ASSETS, ...CDN_ASSETS])
-    )
+    caches.open(CACHE_NAME).then(cache => cache.addAll(CDN_ASSETS))
   );
   self.skipWaiting();
 });
@@ -35,16 +23,33 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response.ok && event.request.url.startsWith('http')) {
+  const url = new URL(event.request.url);
+  const isAppFile = url.origin === self.location.origin;
+
+  if (isAppFile) {
+    // Network-first for app files so updates deploy instantly
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
-      });
-    }).catch(() => caches.match('./index.html'))
-  );
+      }).catch(() => caches.match(event.request) || caches.match('./index.html'))
+    );
+  } else {
+    // Cache-first for CDN assets (they're versioned by URL)
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+  }
 });

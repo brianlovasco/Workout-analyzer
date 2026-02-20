@@ -299,7 +299,22 @@ class TreadmillApp {
     };
 
     this.worker.onmessage = (e) => {
-      if (e.data.type === 'progress') {
+      if (e.data.type === 'diagnostic') {
+        console.log('=== WORKOUT XML DIAGNOSTIC ===');
+        console.log('Opening tag:', e.data.openTag);
+        console.log('Stats count:', e.data.statsCount);
+        console.log('Stats:', e.data.stats);
+        console.log('XML snippet:', e.data.xmlSnippet);
+        // Show diagnostic in a hidden div for easy copying
+        let diagEl = document.getElementById('diagnostic');
+        if (!diagEl) {
+          diagEl = document.createElement('pre');
+          diagEl.id = 'diagnostic';
+          diagEl.style.cssText = 'background:#111;color:#0f0;padding:10px;margin:10px;font-size:11px;max-height:300px;overflow:auto;border-radius:8px;word-wrap:break-word;white-space:pre-wrap;';
+          document.getElementById('upload-section')?.appendChild(diagEl);
+        }
+        diagEl.textContent = 'DIAGNOSTIC (1st workout XML):\n\n' + e.data.xmlSnippet;
+      } else if (e.data.type === 'progress') {
         const pct = Math.round(e.data.value * 100);
         if (progressBar) progressBar.style.width = pct + '%';
         if (status) {

@@ -212,7 +212,29 @@ function processBuffer(text) {
   return '';
 }
 
+let diagnosticSent = false;
+
 function processWorkoutBlock(xml) {
+  // Send diagnostic for the first workout so we can debug the XML structure
+  if (!diagnosticSent) {
+    diagnosticSent = true;
+    // Extract the opening Workout tag and all WorkoutStatistics tags
+    const openTag = xml.match(/<Workout\s[^>]*>/)?.[0] || '(no opening tag)';
+    const allStats = [];
+    const statsIter = xml.matchAll(/<WorkoutStatistics[\s\S]*?(?:\/>|<\/WorkoutStatistics>)/g);
+    for (const m of statsIter) {
+      allStats.push(m[0].substring(0, 300));
+    }
+    self.postMessage({
+      type: 'diagnostic',
+      openTag: openTag.substring(0, 500),
+      statsCount: allStats.length,
+      stats: allStats.slice(0, 5),
+      xmlLength: xml.length,
+      xmlSnippet: xml.substring(0, 1500)
+    });
+  }
+
   const wo = {
     startDate: parseHealthDate(attr(xml, 'startDate')),
     endDate: parseHealthDate(attr(xml, 'endDate')),
@@ -246,56 +268,68 @@ function processWorkoutBlock(xml) {
     wo.isIndoor = indoorMatch[1] === '1';
   }
 
-  // Extract ALL WorkoutStatistics
-  const statsRegex = /<WorkoutStatistics[^>]+>/g;
+  // Extract WorkoutStatistics - match both self-closing and non-self-closing forms
+  const statsRegex = /<WorkoutStatistics[\s\S]*?(?:\/>|<\/WorkoutStatistics>)/g;
   let statsMatch;
   while ((statsMatch = statsRegex.exec(xml)) !== null) {
     const block = statsMatch[0];
     const statType = attr(block, 'type');
 
-    if (statType === 'HKQuantityTypeIdentifierHeartRate') {
-      wo.statistics.avgHR = attrFloat(block, 'average');
-      wo.statistics.minHR = attrFloat(block, 'minimum');
-      wo.statistics.maxHR = attrFloat(block, 'maximum');
-    } else if (statType === 'HKQuantityTypeIdentifierDistanceWalkingRunning') {
-      const distSum = attrFloat(block, 'sum');
+    if (statType && statType.indexOf('HeartRate') !== -1) {
+      wo.statistics.avgHR = attrFloat(block, 'average') ?? attrFloat(block, 'avg');
+      wo.statistics.minHR = attrFloat(block, 'minimum') ?? attrFloat(block, 'min');
+      wo.statistics.maxHR = attrFloat(block, 'maximum') ?? attrFloat(block, 'max');
+    }
+
+    if (statType && statType.indexOf('Distance') !== -1) {
+      // Try sum, quantity, value, total attributes
+      const dist = attrFloat(block, 'sum') ?? attrFloat(block, 'quantity')
+        ?? attrFloat(block, 'value') ?? attrFloat(block, 'total');
       const distUnit = attr(block, 'unit');
-      if (distSum !== null) {
-        wo.statistics.distance = distSum;
+      if (dist !== null && dist > 0) {
+        wo.statistics.distance = dist;
         wo.statistics.distanceUnit = distUnit || 'mi';
       }
-    } else if (statType === 'HKQuantityTypeIdentifierActiveEnergyBurned') {
-      const calSum = attrFloat(block, 'sum');
-      if (calSum !== null) {
-        wo.statistics.activeCalories = calSum;
+    }
+
+    if (statType && (statType.indexOf('EnergyBurned') !== -1 || statType.indexOf('Energy') !== -1)) {
+      const cal = attrFloat(block, 'sum') ?? attrFloat(block, 'quantity')
+        ?? attrFloat(block, 'value') ?? attrFloat(block, 'total');
+      const calUnit = attr(block, 'unit');
+      if (cal !== null && cal > 0) {
+        wo.statistics.activeCalories = cal;
+        wo.statistics.caloriesUnit = calUnit;
       }
-    } else if (statType === 'HKQuantityTypeIdentifierRunningSpeed') {
+    }
+
+    if (statType && statType.indexOf('RunningSpeed') !== -1) {
       wo.statistics.avgSpeed = attrFloat(block, 'average');
       wo.statistics.maxSpeed = attrFloat(block, 'maximum');
     }
   }
 
-  // Use WorkoutStatistics distance as fallback (or primary) for totalDistance
+  // Use WorkoutStatistics distance as fallback
   if ((!wo.totalDistance || wo.totalDistance === 0) && wo.statistics.distance) {
     wo.totalDistance = wo.statistics.distance;
     wo.totalDistanceUnit = wo.statistics.distanceUnit || 'mi';
   }
 
   // Normalize distance to miles
-  if (wo.totalDistanceUnit === 'km') {
+  const du = (wo.totalDistanceUnit || '').toLowerCase();
+  if (du === 'km') {
     wo.totalDistance = wo.totalDistance * 0.621371;
-  } else if (wo.totalDistanceUnit === 'm') {
+  } else if (du === 'm') {
     wo.totalDistance = wo.totalDistance * 0.000621371;
   }
 
   // Normalize energy to kcal
-  if (wo.totalEnergyBurnedUnit === 'kJ') {
-    wo.totalEnergyBurned = wo.totalEnergyBurned / 4.184;
-  }
-
-  // Use active calories as fallback
   if ((!wo.totalEnergyBurned || wo.totalEnergyBurned === 0) && wo.statistics.activeCalories) {
     wo.totalEnergyBurned = wo.statistics.activeCalories;
+    wo.totalEnergyBurnedUnit = wo.statistics.caloriesUnit || 'Cal';
+  }
+  const eu = (wo.totalEnergyBurnedUnit || '').toLowerCase();
+  if (eu === 'kj') {
+    wo.totalEnergyBurned = wo.totalEnergyBurned / 4.184;
   }
 
   // WorkoutEvents (pause/resume)
@@ -308,7 +342,7 @@ function processWorkoutBlock(xml) {
     });
   }
 
-  // Compute pace (min/mile) from duration and distance
+  // Compute pace (min/mile)
   if (wo.totalDistance > 0 && wo.duration > 0) {
     wo.pace = wo.duration / wo.totalDistance;
   }
