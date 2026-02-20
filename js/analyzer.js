@@ -299,13 +299,10 @@ const Analyzer = {
     const maxHR = settings.maxHR || (220 - (settings.age || 30));
     let filtered = workouts;
     if (settings.dateRange?.start) {
-      filtered = filtered.filter(w => new Date(w.startDate) >= new Date(settings.dateRange.start));
+      filtered = filtered.filter(w => new Date(w.startDate) >= settings.dateRange.start);
     }
     if (settings.dateRange?.end) {
-      filtered = filtered.filter(w => new Date(w.startDate) <= new Date(settings.dateRange.end));
-    }
-    if (settings.showIndoorOnly) {
-      filtered = filtered.filter(w => w.isIndoor);
+      filtered = filtered.filter(w => new Date(w.startDate) <= settings.dateRange.end);
     }
 
     return {

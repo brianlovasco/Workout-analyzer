@@ -44,33 +44,14 @@
     <!-- Dashboard (hidden until data loads) -->
     <div id="dashboard" class="hidden">
 
-      <!-- Settings Bar -->
-      <section class="settings-bar card">
-        <div class="settings-group">
-          <label for="setting-age">Age</label>
-          <input type="number" id="setting-age" min="10" max="100" value="30">
-        </div>
-        <div class="settings-group">
-          <label for="setting-unit">Units</label>
-          <select id="setting-unit">
-            <option value="mi">Miles</option>
-            <option value="km">Kilometers</option>
-          </select>
-        </div>
-        <div class="settings-group">
-          <label for="setting-indoor">
-            <input type="checkbox" id="setting-indoor"> Indoor only
-          </label>
-        </div>
-        <div class="settings-group">
-          <label for="setting-date-start">From</label>
-          <input type="date" id="setting-date-start">
-        </div>
-        <div class="settings-group">
-          <label for="setting-date-end">To</label>
-          <input type="date" id="setting-date-end">
-        </div>
-      </section>
+      <!-- Time Range Filter -->
+      <nav class="time-filter">
+        <button class="time-btn" data-range="week">Last Week</button>
+        <button class="time-btn" data-range="mtd">Month</button>
+        <button class="time-btn" data-range="6mo">6 Months</button>
+        <button class="time-btn" data-range="ytd">YTD</button>
+        <button class="time-btn active" data-range="all">All</button>
+      </nav>
 
       <!-- Summary Cards -->
       <section class="summary-grid">
@@ -104,6 +85,12 @@
       <section class="card">
         <h3 class="section-title">Personal Records</h3>
         <div id="personal-records" class="pr-grid"></div>
+      </section>
+
+      <!-- Goals & Awards -->
+      <section class="card goals-section">
+        <h3 class="section-title">2026 Goals</h3>
+        <div class="goals-grid" id="goals-grid"></div>
       </section>
 
       <!-- Tab Navigation -->
@@ -234,7 +221,7 @@
 
   <footer class="app-footer">
     <p>Your data stays on your device. Nothing is uploaded to any server.</p>
-    <p style="opacity:0.3;font-size:0.65rem;">v4</p>
+    <p style="opacity:0.3;font-size:0.65rem;">v5</p>
   </footer>
 
   <!-- Libraries (CDN, cached by service worker) -->
