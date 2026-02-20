@@ -27,10 +27,11 @@
       <div id="drop-zone" class="drop-zone">
         <div class="drop-icon">📁</div>
         <h2>Import Apple Health Data</h2>
-        <p>Drag & drop your <strong>export.zip</strong> or <strong>export.xml</strong> here</p>
+        <p>Upload your <strong>export.zip</strong> or <strong>export.xml</strong></p>
         <p class="drop-hint">On iPhone: Health app → Profile → Export All Health Data</p>
+        <p class="drop-hint">Tip: If the zip crashes, extract it first and upload export.xml directly</p>
         <button class="btn-browse">Browse Files</button>
-        <input type="file" id="file-input" accept=".xml,.zip" hidden>
+        <input type="file" id="file-input" accept=".xml,.zip,application/xml,application/zip,application/x-zip-compressed" hidden>
       </div>
       <div id="upload-progress" style="display:none">
         <div class="progress-track">

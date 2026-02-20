@@ -1,5 +1,16 @@
 // Main application: orchestrates upload, parsing, analysis, and rendering
 
+window.onerror = function (msg, src, line, col, err) {
+  const status = document.getElementById('upload-status');
+  if (status) status.textContent = 'Error: ' + (msg || 'Unknown error') + ' (line ' + line + ')';
+  console.error('Global error:', msg, src, line, col, err);
+};
+window.onunhandledrejection = function (e) {
+  const status = document.getElementById('upload-status');
+  if (status) status.textContent = 'Error: ' + (e.reason?.message || e.reason || 'Unknown async error');
+  console.error('Unhandled rejection:', e.reason);
+};
+
 class TreadmillApp {
   constructor() {
     this.workouts = [];
@@ -137,7 +148,8 @@ class TreadmillApp {
     const progressBar = document.getElementById('progress-bar');
     const dropZone = document.getElementById('drop-zone');
 
-    if (!file.name.endsWith('.xml') && !file.name.endsWith('.zip')) {
+    const lowerName = (file.name || '').toLowerCase();
+    if (!lowerName.endsWith('.xml') && !lowerName.endsWith('.zip')) {
       if (status) status.textContent = 'Please upload an export.xml or export.zip file from Apple Health.';
       return;
     }
@@ -145,34 +157,65 @@ class TreadmillApp {
     if (progress) progress.style.display = 'block';
     if (dropZone) dropZone.style.display = 'none';
     if (status) status.textContent = 'Preparing file...';
+    if (progressBar) progressBar.style.width = '0%';
 
     let xmlFile = file;
 
-    if (file.name.endsWith('.zip')) {
+    if (lowerName.endsWith('.zip')) {
       try {
-        if (status) status.textContent = 'Unzipping export...';
+        if (typeof JSZip === 'undefined') {
+          throw new Error('JSZip library failed to load. Check your internet connection and try again.');
+        }
+        if (status) status.textContent = 'Unzipping export (this may take a moment)...';
+
+        // Load zip directory only (doesn't decompress files yet)
         const zip = await JSZip.loadAsync(file);
-        const xmlEntry = zip.file('apple_health_export/export.xml') || zip.file('export.xml');
+
+        // Find the export.xml in the zip
+        let xmlEntry = zip.file('apple_health_export/export.xml') || zip.file('export.xml');
         if (!xmlEntry) {
           const xmlFiles = Object.keys(zip.files).filter(f => f.endsWith('export.xml'));
           if (xmlFiles.length === 0) {
-            if (status) status.textContent = 'Could not find export.xml in the zip file.';
+            if (status) status.textContent = 'Could not find export.xml in the zip. Try extracting the zip first and uploading the export.xml file directly.';
+            if (dropZone) dropZone.style.display = '';
             return;
           }
-          xmlFile = await zip.file(xmlFiles[0]).async('blob');
-        } else {
-          xmlFile = await xmlEntry.async('blob');
+          xmlEntry = zip.file(xmlFiles[0]);
         }
-        xmlFile.name = 'export.xml';
+
+        // Decompress as arraybuffer (more memory efficient than text on mobile)
+        if (status) status.textContent = 'Decompressing export.xml...';
+        const arrayBuffer = await xmlEntry.async('arraybuffer');
+        xmlFile = new Blob([arrayBuffer], { type: 'application/xml' });
+
+        // Release zip references to free memory
+        arrayBuffer;
+
       } catch (err) {
-        if (status) status.textContent = `Error reading zip: ${err.message}`;
+        console.error('Zip error:', err);
+        if (status) {
+          status.innerHTML = `<strong>Error reading zip:</strong> ${err.message}<br><br>` +
+            '<strong>Alternative:</strong> On a computer, extract the zip file and upload the <code>export.xml</code> file directly. ' +
+            'On iPhone, open Files app, long-press the zip, tap "Uncompress", then find export.xml inside the new folder.';
+        }
+        if (dropZone) dropZone.style.display = '';
         return;
       }
     }
 
-    if (status) status.textContent = 'Parsing Apple Health data...';
+    if (status) status.textContent = 'Starting parser...';
 
-    this.worker = new Worker('js/parser.worker.js');
+    try {
+      this.worker = new Worker('js/parser.worker.js');
+    } catch (err) {
+      if (status) status.textContent = 'Error starting parser: ' + err.message;
+      return;
+    }
+
+    this.worker.onerror = (err) => {
+      console.error('Worker error:', err);
+      if (status) status.textContent = 'Parser error: ' + (err.message || 'Worker crashed. Try uploading the export.xml file instead of the zip.');
+    };
 
     this.worker.onmessage = (e) => {
       if (e.data.type === 'progress') {
@@ -192,7 +235,7 @@ class TreadmillApp {
           this.showDashboard();
         }, 100);
       } else if (e.data.type === 'error') {
-        if (status) status.textContent = `Error: ${e.data.message}`;
+        if (status) status.textContent = 'Parse error: ' + e.data.message;
       }
     };
 

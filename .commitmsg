@@ -1,0 +1,5 @@
+Initial release: Treadmill Workout Analyzer PWA
+
+Client-side web app that parses Apple Health export data and provides
+running workout analysis including pace trends, HR zones, distance/calorie
+tracking, consistency metrics, and per-run breakdowns.

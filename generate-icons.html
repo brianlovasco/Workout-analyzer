@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generate PWA Icons</title></head>
+<body>
+<p>Right-click each image and "Save Image As" to the icons/ folder.</p>
+<h3>icon-192.png</h3>
+<canvas id="c192" width="192" height="192"></canvas>
+<h3>icon-512.png</h3>
+<canvas id="c512" width="512" height="512"></canvas>
+<script>
+function draw(canvas) {
+  const s = canvas.width;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0f0f1a';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, s, s, s * 0.2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#00d4aa';
+  ctx.lineWidth = s * 0.03;
+  ctx.setLineDash([s * 0.04, s * 0.02]);
+  ctx.globalAlpha = 0.3;
+  ctx.beginPath();
+  ctx.arc(s / 2, s * 0.42, s * 0.25, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
+
+  ctx.font = `${s * 0.38}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🏃', s / 2, s * 0.42);
+
+  ctx.fillStyle = '#00d4aa';
+  ctx.font = `bold ${s * 0.09}px sans-serif`;
+  ctx.fillText('TREADMILL', s / 2, s * 0.82);
+}
+draw(document.getElementById('c192'));
+draw(document.getElementById('c512'));
+
+['c192', 'c512'].forEach(id => {
+  const canvas = document.getElementById(id);
+  const img = new Image();
+  img.src = canvas.toDataURL('image/png');
+  img.style.display = 'block';
+  img.style.marginTop = '8px';
+  canvas.parentNode.insertBefore(img, canvas.nextSibling);
+});
+</script>
+</body>
+</html>
