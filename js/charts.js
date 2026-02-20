@@ -9,17 +9,15 @@ const COLORS = {
   grid: 'rgba(255, 255, 255, 0.06)',
   text: '#a0a0b0',
   white: '#e0e0e0',
-  zones: ['#3b82f6', '#22c55e', '#eab308', '#f97316', '#ef4444']
+  zones: ['#3b82f6', '#22c55e', '#eab308', '#f97316', '#ef4444'],
+  yearPalette: ['#00d4aa', '#6366f1', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#3b82f6', '#22c55e']
 };
 
 const Charts = {
   instances: {},
 
   destroy(id) {
-    if (this.instances[id]) {
-      this.instances[id].destroy();
-      delete this.instances[id];
-    }
+    if (this.instances[id]) { this.instances[id].destroy(); delete this.instances[id]; }
   },
 
   destroyAll() {
@@ -77,49 +75,26 @@ const Charts = {
       data: {
         datasets: [
           {
-            label: 'Pace',
-            data: data.map(d => ({ x: d.date, y: d.pace * factor })),
-            borderColor: COLORS.accent,
-            backgroundColor: COLORS.accentLight,
-            borderWidth: 1.5,
-            pointRadius: 2,
-            pointHoverRadius: 5,
-            fill: true,
-            tension: 0.3
+            label: 'Pace', data: data.map(d => ({ x: d.date, y: d.pace * factor })),
+            borderColor: COLORS.accent, backgroundColor: COLORS.accentLight,
+            borderWidth: 1.5, pointRadius: 2, pointHoverRadius: 5, fill: true, tension: 0.3
           },
           {
-            label: '7-day avg',
-            data: data.map(d => ({ x: d.date, y: d.rolling7 * factor })),
-            borderColor: COLORS.secondary,
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: false,
-            tension: 0.4
+            label: '7-day avg', data: data.map(d => ({ x: d.date, y: d.rolling7 * factor })),
+            borderColor: COLORS.secondary, borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4
           },
           {
-            label: '30-day avg',
-            data: data.map(d => ({ x: d.date, y: d.rolling30 * factor })),
-            borderColor: COLORS.tertiary,
-            borderWidth: 2,
-            pointRadius: 0,
-            borderDash: [6, 3],
-            fill: false,
-            tension: 0.4
+            label: '30-day avg', data: data.map(d => ({ x: d.date, y: d.rolling30 * factor })),
+            borderColor: COLORS.tertiary, borderWidth: 2, pointRadius: 0, borderDash: [6, 3], fill: false, tension: 0.4
           }
         ]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: this.commonScales('', label, true),
         plugins: {
           ...this.defaultPlugins('Pace Over Time'),
-          tooltip: {
-            ...this.defaultPlugins('').tooltip,
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${formatPace(ctx.parsed.y)}`
-            }
-          }
+          tooltip: { ...this.defaultPlugins('').tooltip, callbacks: { label: ctx => `${ctx.dataset.label}: ${formatPace(ctx.parsed.y)}` } }
         }
       }
     });
@@ -132,7 +107,6 @@ const Charts = {
     const distUnit = unit === 'km' ? 'km' : 'mi';
     const paceUnit = unit === 'km' ? 'min/km' : 'min/mi';
     const paceFactor = unit === 'km' ? 1 / 1.60934 : 1;
-
     el.innerHTML = '';
     const items = [
       { label: 'Fastest Pace', value: records.fastestPace ? formatPace(records.fastestPace.value * paceFactor) + ' ' + paceUnit : 'N/A', date: records.fastestPace?.date, icon: '⚡' },
@@ -163,16 +137,12 @@ const Charts = {
       data: {
         labels: recent.map(d => new Date(d.date).toLocaleDateString()),
         datasets: hrData.zones.map((z, i) => ({
-          label: z.name,
-          data: recent.map(d => +(d.zoneTimes[i] || 0).toFixed(1)),
-          backgroundColor: z.color + 'cc',
-          borderColor: z.color,
-          borderWidth: 1
+          label: z.name, data: recent.map(d => +(d.zoneTimes[i] || 0).toFixed(1)),
+          backgroundColor: z.color + 'cc', borderColor: z.color, borderWidth: 1
         }))
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
           x: { stacked: true, grid: { color: COLORS.grid }, ticks: { color: COLORS.text, maxRotation: 45, maxTicksLimit: 15 } },
           y: { stacked: true, grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'Minutes', color: COLORS.text } }
@@ -188,29 +158,18 @@ const Charts = {
       data: {
         datasets: [
           {
-            label: 'Avg HR',
-            data: data.map(d => ({ x: d.date, y: d.avgHR })),
-            borderColor: COLORS.accent,
-            backgroundColor: COLORS.accentLight,
-            borderWidth: 2,
-            pointRadius: 2,
-            fill: true,
-            tension: 0.3
+            label: 'Avg HR', data: data.map(d => ({ x: d.date, y: d.avgHR })),
+            borderColor: COLORS.accent, backgroundColor: COLORS.accentLight,
+            borderWidth: 2, pointRadius: 2, fill: true, tension: 0.3
           },
           {
-            label: 'Max HR',
-            data: data.filter(d => d.maxHR).map(d => ({ x: d.date, y: d.maxHR })),
-            borderColor: COLORS.zones[4],
-            borderWidth: 1.5,
-            pointRadius: 1,
-            fill: false,
-            tension: 0.3
+            label: 'Max HR', data: data.filter(d => d.maxHR).map(d => ({ x: d.date, y: d.maxHR })),
+            borderColor: COLORS.zones[4], borderWidth: 1.5, pointRadius: 1, fill: false, tension: 0.3
           }
         ]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: this.commonScales('', 'BPM'),
         plugins: this.defaultPlugins('Heart Rate Over Time')
       }
@@ -231,8 +190,7 @@ const Charts = {
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
           x: { type: 'time', time: { unit: 'month' }, grid: { color: COLORS.grid }, ticks: { color: COLORS.text } },
           y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'BPM drift (2nd half - 1st half)', color: COLORS.text } }
@@ -251,17 +209,12 @@ const Charts = {
       data: {
         labels: data.map(d => d.week),
         datasets: [{
-          label: `Weekly ${label}`,
-          data: data.map(d => +(d.distance * factor).toFixed(2)),
-          backgroundColor: COLORS.accent + '99',
-          borderColor: COLORS.accent,
-          borderWidth: 1,
-          borderRadius: 4
+          label: `Weekly ${label}`, data: data.map(d => +(d.distance * factor).toFixed(2)),
+          backgroundColor: COLORS.accent + '99', borderColor: COLORS.accent, borderWidth: 1, borderRadius: 4
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
           x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, maxRotation: 45, maxTicksLimit: 20 } },
           y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: label, color: COLORS.text } }
@@ -279,17 +232,12 @@ const Charts = {
       data: {
         labels: data.map(d => d.month),
         datasets: [{
-          label: `Monthly ${label}`,
-          data: data.map(d => +(d.distance * factor).toFixed(2)),
-          backgroundColor: COLORS.secondary + '99',
-          borderColor: COLORS.secondary,
-          borderWidth: 1,
-          borderRadius: 4
+          label: `Monthly ${label}`, data: data.map(d => +(d.distance * factor).toFixed(2)),
+          backgroundColor: COLORS.secondary + '99', borderColor: COLORS.secondary, borderWidth: 1, borderRadius: 4
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
           x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, maxRotation: 45 } },
           y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: label, color: COLORS.text } }
@@ -306,21 +254,44 @@ const Charts = {
       type: 'line',
       data: {
         datasets: [{
-          label: `Cumulative ${label}`,
-          data: data.map(d => ({ x: d.date, y: +(d.cumulative * factor).toFixed(1) })),
-          borderColor: COLORS.accent,
-          backgroundColor: COLORS.accentLight,
-          borderWidth: 2,
-          pointRadius: 0,
-          fill: true,
-          tension: 0.2
+          label: `Cumulative ${label}`, data: data.map(d => ({ x: d.date, y: +(d.cumulative * factor).toFixed(1) })),
+          borderColor: COLORS.accent, backgroundColor: COLORS.accentLight,
+          borderWidth: 2, pointRadius: 0, fill: true, tension: 0.2
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: this.commonScales('', label),
         plugins: this.defaultPlugins('Cumulative Distance')
+      }
+    });
+  },
+
+  // ---- NEW: Year-over-Year ----
+  renderYoYChart(yoyData, unit) {
+    const factor = unit === 'km' ? 1.60934 : 1;
+    const label = unit === 'km' ? 'km' : 'miles';
+    const datasets = yoyData.years.map((year, i) => ({
+      label: year,
+      data: yoyData.data[year].map(v => +(v * factor).toFixed(1)),
+      borderColor: COLORS.yearPalette[i % COLORS.yearPalette.length],
+      backgroundColor: COLORS.yearPalette[i % COLORS.yearPalette.length] + '22',
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      fill: false,
+      tension: 0.3
+    }));
+    return this.create('chart-yoy', {
+      type: 'line',
+      data: { labels: yoyData.monthNames, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text } },
+          y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: label, color: COLORS.text } }
+        },
+        plugins: this.defaultPlugins('Year-over-Year Monthly Mileage')
       }
     });
   },
@@ -331,19 +302,13 @@ const Charts = {
       type: 'line',
       data: {
         datasets: [{
-          label: 'Calories',
-          data: data.map(d => ({ x: d.date, y: Math.round(d.calories) })),
-          borderColor: COLORS.tertiary,
-          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-          borderWidth: 1.5,
-          pointRadius: 2,
-          fill: true,
-          tension: 0.3
+          label: 'Calories', data: data.map(d => ({ x: d.date, y: Math.round(d.calories) })),
+          borderColor: COLORS.tertiary, backgroundColor: 'rgba(245, 158, 11, 0.15)',
+          borderWidth: 1.5, pointRadius: 2, fill: true, tension: 0.3
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: this.commonScales('', 'kcal'),
         plugins: this.defaultPlugins('Calories Per Run')
       }
@@ -358,18 +323,12 @@ const Charts = {
       type: 'line',
       data: {
         datasets: [{
-          label: label,
-          data: valid.map(d => ({ x: d.date, y: +(d.calPerMile / factor).toFixed(1) })),
-          borderColor: COLORS.zones[3],
-          borderWidth: 1.5,
-          pointRadius: 2,
-          fill: false,
-          tension: 0.3
+          label: label, data: valid.map(d => ({ x: d.date, y: +(d.calPerMile / factor).toFixed(1) })),
+          borderColor: COLORS.zones[3], borderWidth: 1.5, pointRadius: 2, fill: false, tension: 0.3
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: this.commonScales('', label),
         plugins: this.defaultPlugins('Calorie Efficiency')
       }
@@ -382,17 +341,12 @@ const Charts = {
       data: {
         labels: data.map(d => d.week),
         datasets: [{
-          label: 'Weekly Calories',
-          data: data.map(d => Math.round(d.calories)),
-          backgroundColor: COLORS.tertiary + '99',
-          borderColor: COLORS.tertiary,
-          borderWidth: 1,
-          borderRadius: 4
+          label: 'Weekly Calories', data: data.map(d => Math.round(d.calories)),
+          backgroundColor: COLORS.tertiary + '99', borderColor: COLORS.tertiary, borderWidth: 1, borderRadius: 4
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
           x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, maxRotation: 45, maxTicksLimit: 20 } },
           y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'kcal', color: COLORS.text } }
@@ -409,17 +363,12 @@ const Charts = {
       data: {
         labels: data.map(d => d.week),
         datasets: [{
-          label: 'Runs',
-          data: data.map(d => d.runs),
-          backgroundColor: COLORS.accent + '99',
-          borderColor: COLORS.accent,
-          borderWidth: 1,
-          borderRadius: 4
+          label: 'Runs', data: data.map(d => d.runs),
+          backgroundColor: COLORS.accent + '99', borderColor: COLORS.accent, borderWidth: 1, borderRadius: 4
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
           x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, maxRotation: 45, maxTicksLimit: 20 } },
           y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, stepSize: 1 }, title: { display: true, text: 'Runs', color: COLORS.text } }
@@ -436,27 +385,16 @@ const Charts = {
       data: {
         labels: dayNames,
         datasets: [{
-          data: data,
-          backgroundColor: [
-            '#ef444499', '#f9731699', '#eab30899',
-            '#22c55e99', '#3b82f699', '#6366f199', '#a855f799'
-          ],
-          borderColor: [
-            '#ef4444', '#f97316', '#eab308',
-            '#22c55e', '#3b82f6', '#6366f1', '#a855f7'
-          ],
+          data,
+          backgroundColor: ['#ef444499', '#f9731699', '#eab30899', '#22c55e99', '#3b82f699', '#6366f199', '#a855f799'],
+          borderColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#6366f1', '#a855f7'],
           borderWidth: 2
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
-          r: {
-            grid: { color: COLORS.grid },
-            ticks: { color: COLORS.text, stepSize: 1, backdropColor: 'transparent' },
-            pointLabels: { color: COLORS.white, font: { size: 13 } }
-          }
+          r: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, stepSize: 1, backdropColor: 'transparent' }, pointLabels: { color: COLORS.white, font: { size: 13 } } }
         },
         plugins: this.defaultPlugins('Runs by Day of Week')
       }
@@ -467,95 +405,52 @@ const Charts = {
     const el = document.getElementById('heatmap');
     if (!el) return;
     el.innerHTML = '';
-
     const now = new Date();
-    const yearAgo = new Date(now);
-    yearAgo.setFullYear(yearAgo.getFullYear() - 1);
-
-    const container = document.createElement('div');
-    container.className = 'heatmap-container';
-
-    const monthLabels = document.createElement('div');
-    monthLabels.className = 'heatmap-months';
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    const grid = document.createElement('div');
-    grid.className = 'heatmap-grid';
-
+    const yearAgo = new Date(now); yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+    const container = document.createElement('div'); container.className = 'heatmap-container';
+    const grid = document.createElement('div'); grid.className = 'heatmap-grid';
     const dayLabels = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
-    const dayLabelCol = document.createElement('div');
-    dayLabelCol.className = 'heatmap-day-labels';
+    const dayLabelCol = document.createElement('div'); dayLabelCol.className = 'heatmap-day-labels';
     dayLabels.forEach(label => {
-      const d = document.createElement('div');
-      d.className = 'heatmap-day-label';
-      d.textContent = label;
-      dayLabelCol.appendChild(d);
+      const d = document.createElement('div'); d.className = 'heatmap-day-label'; d.textContent = label; dayLabelCol.appendChild(d);
     });
     grid.appendChild(dayLabelCol);
-
-    let currentMonth = -1;
-    const d = new Date(yearAgo);
-    d.setDate(d.getDate() - d.getDay());
-
+    const d = new Date(yearAgo); d.setDate(d.getDate() - d.getDay());
     while (d <= now) {
-      const week = document.createElement('div');
-      week.className = 'heatmap-week';
-
+      const week = document.createElement('div'); week.className = 'heatmap-week';
       for (let day = 0; day < 7; day++) {
         const cell = document.createElement('div');
         const dateKey = d.toISOString().slice(0, 10);
         const count = heatmapData[dateKey] || 0;
-
         cell.className = 'heatmap-cell';
-        if (d > now || d < yearAgo) {
-          cell.classList.add('heatmap-empty');
-        } else if (count === 0) {
-          cell.classList.add('heatmap-0');
-        } else if (count === 1) {
-          cell.classList.add('heatmap-1');
-        } else if (count === 2) {
-          cell.classList.add('heatmap-2');
-        } else {
-          cell.classList.add('heatmap-3');
-        }
-
+        if (d > now || d < yearAgo) cell.classList.add('heatmap-empty');
+        else if (count === 0) cell.classList.add('heatmap-0');
+        else if (count === 1) cell.classList.add('heatmap-1');
+        else if (count === 2) cell.classList.add('heatmap-2');
+        else cell.classList.add('heatmap-3');
         cell.title = `${dateKey}: ${count} run${count !== 1 ? 's' : ''}`;
         week.appendChild(cell);
         d.setDate(d.getDate() + 1);
       }
-
       grid.appendChild(week);
-
-      if (d.getMonth() !== currentMonth) {
-        currentMonth = d.getMonth();
-      }
     }
-
     container.appendChild(grid);
     el.appendChild(container);
   },
 
   renderHourDistribution(data) {
-    const labels = data.map((_, i) => {
-      const h = i % 12 || 12;
-      return `${h}${i < 12 ? 'a' : 'p'}`;
-    });
+    const labels = data.map((_, i) => { const h = i % 12 || 12; return `${h}${i < 12 ? 'a' : 'p'}`; });
     return this.create('chart-hour', {
       type: 'bar',
       data: {
         labels,
         datasets: [{
-          label: 'Runs',
-          data,
-          backgroundColor: COLORS.secondary + '99',
-          borderColor: COLORS.secondary,
-          borderWidth: 1,
-          borderRadius: 4
+          label: 'Runs', data,
+          backgroundColor: COLORS.secondary + '99', borderColor: COLORS.secondary, borderWidth: 1, borderRadius: 4
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
           x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text } },
           y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, stepSize: 1 }, title: { display: true, text: 'Runs', color: COLORS.text } }
@@ -571,19 +466,13 @@ const Charts = {
       type: 'line',
       data: {
         datasets: [{
-          label: 'Cadence (steps/min)',
-          data: data.map(d => ({ x: d.date, y: d.cadence })),
-          borderColor: COLORS.secondary,
-          backgroundColor: COLORS.secondaryLight,
-          borderWidth: 1.5,
-          pointRadius: 2,
-          fill: true,
-          tension: 0.3
+          label: 'Cadence (steps/min)', data: data.map(d => ({ x: d.date, y: d.cadence })),
+          borderColor: COLORS.secondary, backgroundColor: COLORS.secondaryLight,
+          borderWidth: 1.5, pointRadius: 2, fill: true, tension: 0.3
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: this.commonScales('', 'steps/min'),
         plugins: this.defaultPlugins('Cadence Over Time')
       }
@@ -595,39 +484,20 @@ const Charts = {
       type: 'scatter',
       data: {
         datasets: [{
-          label: 'Pace vs Avg HR',
-          data: data,
-          backgroundColor: COLORS.accent + '99',
-          borderColor: COLORS.accent,
-          borderWidth: 1,
-          pointRadius: 4,
-          pointHoverRadius: 7
+          label: 'Pace vs Avg HR', data,
+          backgroundColor: COLORS.accent + '99', borderColor: COLORS.accent,
+          borderWidth: 1, pointRadius: 4, pointHoverRadius: 7
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
-          x: {
-            reverse: true,
-            grid: { color: COLORS.grid },
-            ticks: { color: COLORS.text, callback: v => formatPace(v) },
-            title: { display: true, text: 'Pace (faster →)', color: COLORS.text }
-          },
-          y: {
-            grid: { color: COLORS.grid },
-            ticks: { color: COLORS.text },
-            title: { display: true, text: 'Avg Heart Rate (bpm)', color: COLORS.text }
-          }
+          x: { reverse: true, grid: { color: COLORS.grid }, ticks: { color: COLORS.text, callback: v => formatPace(v) }, title: { display: true, text: 'Pace (faster →)', color: COLORS.text } },
+          y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'Avg Heart Rate (bpm)', color: COLORS.text } }
         },
         plugins: {
           ...this.defaultPlugins('Pace vs Heart Rate'),
-          tooltip: {
-            ...this.defaultPlugins('').tooltip,
-            callbacks: {
-              label: ctx => `Pace: ${formatPace(ctx.parsed.x)}, HR: ${ctx.parsed.y} bpm`
-            }
-          }
+          tooltip: { ...this.defaultPlugins('').tooltip, callbacks: { label: ctx => `Pace: ${formatPace(ctx.parsed.x)}, HR: ${ctx.parsed.y} bpm` } }
         }
       }
     });
@@ -638,31 +508,107 @@ const Charts = {
       type: 'scatter',
       data: {
         datasets: [{
-          label: 'Distance vs Calories',
-          data: data,
-          backgroundColor: COLORS.tertiary + '99',
-          borderColor: COLORS.tertiary,
+          label: 'Distance vs Calories', data,
+          backgroundColor: COLORS.tertiary + '99', borderColor: COLORS.tertiary,
+          borderWidth: 1, pointRadius: 4, pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'Distance (mi)', color: COLORS.text } },
+          y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'Calories (kcal)', color: COLORS.text } }
+        },
+        plugins: this.defaultPlugins('Distance vs Calories')
+      }
+    });
+  },
+
+  // ---- NEW: Recovery Charts ----
+  renderRecoveryScatter(recoveryData) {
+    if (!recoveryData.scatter.length) return;
+    return this.create('chart-recovery-scatter', {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Rest Days vs Pace',
+          data: recoveryData.scatter.map(d => ({ x: d.restDays, y: d.pace })),
+          backgroundColor: COLORS.accent + '99',
+          borderColor: COLORS.accent,
           borderWidth: 1,
           pointRadius: 4,
           pointHoverRadius: 7
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         scales: {
-          x: {
-            grid: { color: COLORS.grid },
-            ticks: { color: COLORS.text },
-            title: { display: true, text: 'Distance (mi)', color: COLORS.text }
-          },
-          y: {
-            grid: { color: COLORS.grid },
-            ticks: { color: COLORS.text },
-            title: { display: true, text: 'Calories (kcal)', color: COLORS.text }
-          }
+          x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text, stepSize: 1 }, title: { display: true, text: 'Days Since Last Run', color: COLORS.text } },
+          y: { reverse: true, grid: { color: COLORS.grid }, ticks: { color: COLORS.text, callback: v => formatPace(v) }, title: { display: true, text: 'Pace (faster ↑)', color: COLORS.text } }
         },
-        plugins: this.defaultPlugins('Distance vs Calories')
+        plugins: {
+          ...this.defaultPlugins('Recovery: Rest Days vs Pace'),
+          tooltip: { ...this.defaultPlugins('').tooltip, callbacks: { label: ctx => `${ctx.parsed.x} day(s) rest → ${formatPace(ctx.parsed.y)}/mi` } }
+        }
+      }
+    });
+  },
+
+  renderRecoveryBars(recoveryData) {
+    if (!recoveryData.avgByRest.length) return;
+    return this.create('chart-recovery-bars', {
+      type: 'bar',
+      data: {
+        labels: recoveryData.avgByRest.map(d => d.days === '6+' ? '6+ days' : d.days + ' day' + (d.days !== '1' && d.days !== 1 ? 's' : '')),
+        datasets: [{
+          label: 'Avg Pace',
+          data: recoveryData.avgByRest.map(d => +d.avgPace.toFixed(2)),
+          backgroundColor: recoveryData.avgByRest.map((_, i) => COLORS.yearPalette[i % COLORS.yearPalette.length] + '99'),
+          borderColor: recoveryData.avgByRest.map((_, i) => COLORS.yearPalette[i % COLORS.yearPalette.length]),
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y',
+        scales: {
+          x: { reverse: true, grid: { color: COLORS.grid }, ticks: { color: COLORS.text, callback: v => formatPace(v) }, title: { display: true, text: 'Avg Pace (faster →)', color: COLORS.text } },
+          y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text } }
+        },
+        plugins: {
+          ...this.defaultPlugins('Average Pace by Rest Period'),
+          tooltip: { ...this.defaultPlugins('').tooltip, callbacks: { label: ctx => `${formatPace(ctx.parsed.x)}/mi (${recoveryData.avgByRest[ctx.dataIndex].count} runs)` } }
+        }
+      }
+    });
+  },
+
+  // ---- NEW: Run Detail HR Chart ----
+  renderRunDetailHR(canvasId, hrSamples, startDate) {
+    if (!hrSamples || !hrSamples.length) return;
+    const startTs = hrSamples[0].ts;
+    return this.create(canvasId, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'Heart Rate',
+          data: hrSamples.map(s => ({ x: (s.ts - startTs) / 60000, y: s.value })),
+          borderColor: COLORS.zones[4],
+          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { type: 'linear', grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'Minutes', color: COLORS.text } },
+          y: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text }, title: { display: true, text: 'BPM', color: COLORS.text } }
+        },
+        plugins: this.defaultPlugins('Heart Rate During Run')
       }
     });
   }

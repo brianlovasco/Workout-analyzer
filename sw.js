@@ -1,4 +1,4 @@
-const CACHE_NAME = 'treadmill-v5';
+const CACHE_NAME = 'treadmill-v6';
 
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js',
